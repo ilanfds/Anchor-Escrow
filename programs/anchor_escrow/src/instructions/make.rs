@@ -1,5 +1,11 @@
 use anchor_lang::prelude::*;
 
+
+use anchor_spl::token_interface::*;            // TransferChecked, transfer_checked, Mint, TokenAccount, etc.
+use anchor_spl::associated_token::AssociatedToken;
+use crate::state::Escrow;                      // sobe até a raiz e pega Escrow
+use crate::errors::EscrowError;                // sobe até a raiz e pega EscrowError
+
 #[derive(Accounts)]
 #[instruction(seed:u64)]
 
@@ -11,7 +17,7 @@ pub struct Make<'info>{
     #[account(
         init,
         payer=maker,
-        space = Escrow::InitSpace + Escrow::DISCRIMINATOR.len(),
+        space = Escrow::INIT_SPACE + Escrow::DISCRIMINATOR.len(),
         seeds = [b"escrow", maker.key().as_ref(), seed.to_le_bytes().as_ref()],
         bump,
     )]
@@ -49,14 +55,14 @@ pub struct Make<'info>{
 
 impl<'info> Make<'info> {
 
-    fn populate_escrow(&mut self, seed:u64, amount:u64, bump:u8) -> Result<()> {
+    fn populate_escrow(&mut self, seed:u64, receive:u64, bump:u8) -> Result<()> {
 
         self.escrow.set_inner( Escrow{
             seed,
             maker: self.maker.key(),
             mint_a: self.mint_a.key(),
             mint_b: self.mint_b.key(),
-            receive: amount,
+            receive,
             bump,
             }
         );
@@ -85,4 +91,17 @@ impl<'info> Make<'info> {
         Ok(())
 
     }
+}
+
+pub fn handler(ctx: Context<Make>, seed:u64,receive:u64, amount:u64) -> Result<()>{
+
+    require_gt!(amount,0,EscrowError::InvalidAmount);
+    require_gt!(receive,0,EscrowError::InvalidAmount);
+
+    ctx.accounts.populate_escrow(seed,receive,ctx.bumps.escrow)?;
+
+    ctx.accounts.deposit_tokens(amount)?;
+
+    Ok(())
+
 }
